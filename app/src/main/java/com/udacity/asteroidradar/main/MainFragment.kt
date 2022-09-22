@@ -3,10 +3,10 @@ package com.udacity.asteroidradar.main
 import android.os.Bundle
 import android.view.*
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.findNavController
-import androidx.recyclerview.widget.GridLayoutManager
+import com.squareup.picasso.Picasso
+import com.udacity.asteroidradar.Asteroid
 import com.udacity.asteroidradar.AsteroidAdapter
 import com.udacity.asteroidradar.AsteroidListener
 import com.udacity.asteroidradar.R
@@ -15,8 +15,10 @@ import com.udacity.asteroidradar.databinding.FragmentMainBinding
 class MainFragment : Fragment() {
 
     private val viewModel: MainViewModel by lazy {
-        ViewModelProvider(this).get(MainViewModel::class.java)
+        ViewModelProvider(this, MainViewModel.Factory(requireActivity().application))[MainViewModel::class.java]
     }
+
+    private lateinit var adapter: AsteroidAdapter
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
                               savedInstanceState: Bundle?): View {
@@ -27,7 +29,7 @@ class MainFragment : Fragment() {
 
         setHasOptionsMenu(true)
 
-        val adapter = AsteroidAdapter(AsteroidListener { asteroid ->
+        adapter = AsteroidAdapter(AsteroidListener { asteroid ->
             viewModel.onAsteroidClicked(asteroid)
         })
 
@@ -36,6 +38,16 @@ class MainFragment : Fragment() {
         viewModel.asteroids.observe(viewLifecycleOwner) {
             it?.let {
                 adapter.submitList(it)
+            }
+        }
+
+        viewModel.pictureOfDay.observe(viewLifecycleOwner) {
+            it?.let {
+                if (it.mediaType == "image") {
+                   Picasso.get().load(it.url).into(binding.activityMainImageOfTheDay)
+                } else {
+                    binding.activityMainImageOfTheDay.setImageResource(R.drawable.placeholder_picture_of_day)
+                }
             }
         }
 
@@ -55,6 +67,24 @@ class MainFragment : Fragment() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        viewModel.onFilterChanged(when(item.itemId) {
+            R.id.show_rent_menu -> {
+                Filter.TODAY
+            }
+            R.id.show_buy_menu -> {
+                Filter.SAVED
+            }
+            else -> {
+                Filter.WEEK
+            }
+        })
+        viewModel.asteroids.removeObservers(viewLifecycleOwner)
+        viewModel.asteroids.observe(viewLifecycleOwner) {
+            it?.let {
+                adapter.submitList(it)
+            }
+        }
+
         return true
     }
 }

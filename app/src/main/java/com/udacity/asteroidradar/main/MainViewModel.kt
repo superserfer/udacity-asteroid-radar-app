@@ -1,39 +1,38 @@
 package com.udacity.asteroidradar.main
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.*
 import com.udacity.asteroidradar.Asteroid
+import com.udacity.asteroidradar.PictureOfDay
+import com.udacity.asteroidradar.api.NasaApi
+import retrofit2.Call
+import retrofit2.Response
+import com.udacity.asteroidradar.database.getDatabase
+import com.udacity.asteroidradar.repository.AsteroidRepository
+import kotlinx.coroutines.launch
 
-class MainViewModel : ViewModel() {
+// TODO: ADD your Token here
+const val API_KEY = "DEMO_KEY"
 
-    private val _asteroids = MutableLiveData<List<Asteroid>>()
-    val asteroids: LiveData<List<Asteroid>>
-        get() = _asteroids
+class MainViewModel(application: Application) : ViewModel() {
+
+    private val database = getDatabase(application)
+    private val asteroidsRepository = AsteroidRepository(database)
+    var asteroids = asteroidsRepository.asteroids
 
     private val _navigateToAsteroid = MutableLiveData<Asteroid?>()
     val navigateToAsteroid
         get() = _navigateToAsteroid
 
+    private val _pictureOfTheDay = MutableLiveData<PictureOfDay>()
+    val pictureOfDay
+        get() = _pictureOfTheDay
+
     init {
-        // TODO: Implement API connection/DB buffer and remove test data
-        _asteroids.value = listOf<Asteroid>(
-            Asteroid(1L, "(2005 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(2L, "(2006 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, true),
-            Asteroid(3L, "(20zrz05 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(4L, "(200345 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(5L, "(ftt SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(6L, "(2ff0343405 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(7L, "(2005 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(8L, "(200re5 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, true),
-            Asteroid(9L, "(20f05 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(10L, "(2fd005 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(11L, "(20dfg05 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(12L, "(20fg05 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(13L, "(2005jhk SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false),
-            Asteroid(14L, "(2005hgf SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, true),
-            Asteroid(15L, "(20fdfdfdfdfd05 SC)", "2022-09-15", 20.2, 0.5420507863, 24.985643653, 0.3241439714, false)
-            )
+        viewModelScope.launch {
+            asteroidsRepository.refreshAsteroid()
+        }
+        loadPictureOfTheDay()
     }
 
     fun onAsteroidClicked(asteroid: Asteroid) {
@@ -44,4 +43,43 @@ class MainViewModel : ViewModel() {
         _navigateToAsteroid.value = null
     }
 
+    fun onFilterChanged(filter: Filter) {
+        asteroids = when(filter) {
+            Filter.TODAY -> {
+                asteroidsRepository.asteroidsToday
+            }
+            Filter.WEEK -> {
+                asteroidsRepository.asteroidsWeek
+            }
+            else -> {
+                asteroidsRepository.asteroids
+            }
+        }
+    }
+
+    private fun loadPictureOfTheDay() {
+        NasaApi.retrofitService.getImageOfTheDay(API_KEY).enqueue( object: retrofit2.Callback<PictureOfDay> {
+            override fun onResponse(call: Call<PictureOfDay>, response: Response<PictureOfDay>) {
+                _pictureOfTheDay.value = response.body()
+            }
+
+            override fun onFailure(call: Call<PictureOfDay>, t: Throwable) {
+                println(t.message)
+            }
+        })
+    }
+
+    class Factory(val app: Application) : ViewModelProvider.Factory {
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
+                @Suppress("UNCHECKED_CAST")
+                return MainViewModel(app) as T
+            }
+            throw IllegalArgumentException("Unable to construct viewmodel")
+        }
+    }
+}
+
+enum class Filter() {
+    WEEK, TODAY, SAVED
 }
